@@ -1,3 +1,5 @@
+use hocon::{Hocon, HoconLoader,Error};
+
 use hyper::{
     header::CONTENT_TYPE,
     service::{make_service_fn, service_fn},
@@ -51,8 +53,28 @@ async fn serve_req(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> 
     Ok(response)
 }
 
+fn parse_config() -> Result<Hocon, Error> {
+    let s = r#"{
+        jikji {
+          databases {
+             default {
+                driver: "foo"
+             }
+          }
+        }
+    }"#;
+
+
+    return HoconLoader::new()
+        //.load_str(s)?
+        .load_file("example.conf")?
+        .hocon();
+}
+
 #[tokio::main]
 async fn main() {
+    let config = parse_config().unwrap();
+    assert_eq!(config["jikji"]["databases"]["default"]["driver"].as_string(), Some(String::from("postgres")));
     let addr = ([127, 0, 0, 1], 9898).into();
     println!("Listening on http://{}", addr);
 
