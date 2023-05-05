@@ -54,19 +54,7 @@ async fn serve_req(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> 
 }
 
 fn parse_config() -> Result<Hocon, Error> {
-    let s = r#"{
-        jikji {
-          databases {
-             default {
-                driver: "foo"
-             }
-          }
-        }
-    }"#;
-
-
     return HoconLoader::new()
-        //.load_str(s)?
         .load_file("example.conf")?
         .hocon();
 }
