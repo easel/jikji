@@ -1,14 +1,15 @@
-use hocon::{Hocon, HoconLoader,Error};
-
 use hyper::{
     header::CONTENT_TYPE,
     service::{make_service_fn, service_fn},
     Body, Request, Response, Server,
 };
-use prometheus::{Counter, Encoder, Gauge, HistogramVec, TextEncoder};
-
 use lazy_static::lazy_static;
 use prometheus::{labels, opts, register_counter, register_gauge, register_histogram_vec};
+use prometheus::{Counter, Encoder, Gauge, HistogramVec, TextEncoder};
+use serde::Deserialize;
+use std::fs;
+use std::iter::Map;
+use toml::Table;
 
 lazy_static! {
     static ref HTTP_COUNTER: Counter = register_counter!(opts!(
@@ -53,16 +54,101 @@ async fn serve_req(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> 
     Ok(response)
 }
 
-fn parse_config() -> Result<Hocon, Error> {
-    return HoconLoader::new()
-        .load_file("example.conf")?
-        .hocon();
+#[derive(Deserialize)]
+struct Config {
+    title: String,
+    databases: Vec<Database>
 }
+
+#[derive(Deserialize)]
+struct Database {
+    driver: String,
+    hostname: String,
+    port: u16,
+    username: String,
+    password: String,
+    database: String,
+    metrics: Vec<Metric>
+}
+
+#[derive(Deserialize)]
+struct Metric {
+    name: String,
+    frequency: String,
+}
+
+fn parse_config() ->  Config {
+    let config = fs::read_to_string("example.toml").expect("Config not found");
+    toml::from_str(&config).unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const test_config: &str = r###"
+title = "Default Jikji Config"
+
+[[databases]]
+driver = "postgres"
+hostname = "127.0.0.1"
+port = 5432
+username = "postgres"
+password= "secret"
+database= "postgres"
+
+[[databases.metrics]]
+name="hubspot.actions.delayed"
+type="counter"
+frequency="15m"
+query = """ \
+    select count(*) from actions_scheduled
+    where completed is null
+    and scheduled < now() - interval '15 minutes'
+    and scheduled > now() - interval '1 day';
+    """
+"###;
+
+    fn config() ->  Config {
+        toml::from_str(test_config).unwrap()
+    }
+
+    #[test]
+    fn it_works() {
+        let result = 2 + 2;
+        assert_eq!(result, 4);
+    }
+
+    #[test]
+    fn parses_name() {
+        assert_eq!(
+            config().title,
+            String::from("Default Jikji Config")
+        );
+
+    }
+
+    #[test]
+    fn parses_database_driver() {
+        assert_eq!(
+            config().databases.get(0).unwrap().driver,
+            String::from("postgres")
+        );
+    }
+
+    #[test]
+    fn parses_metric_name() {
+        assert_eq!(
+            config().databases.get(0).unwrap().metrics.get(0).unwrap().name,
+            String::from("hubspot.actions.delayed")
+        );
+    }
+}
+
 
 #[tokio::main]
 async fn main() {
-    let config = parse_config().unwrap();
-    assert_eq!(config["jikji"]["databases"]["default"]["driver"].as_string(), Some(String::from("postgres")));
+    let config = parse_config();
     let addr = ([127, 0, 0, 1], 9898).into();
     println!("Listening on http://{}", addr);
 

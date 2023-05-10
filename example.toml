@@ -1,0 +1,20 @@
+title = "Default Jikji Config"
+
+[[databases]]
+driver = "postgres"
+hostname = "127.0.0.1"
+port = 5432
+username = "postgres"
+password= "secret"
+database= "postgres"
+
+[[databases.metrics]]
+name="hubspot.actions.delayed"
+type="counter"
+frequency="15m"
+query = """ \
+  select count(*) from actions_scheduled
+                  where completed is null
+                    and scheduled < now() - interval '15 minutes'
+                    and scheduled > now() - interval '1 day';
+"""
